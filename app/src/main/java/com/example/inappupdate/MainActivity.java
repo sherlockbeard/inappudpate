@@ -1,22 +1,30 @@
 package com.example.inappupdate;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.coordinatorlayout.widget.CoordinatorLayout;
 
 import android.content.Intent;
 import android.content.IntentSender;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 
+import com.google.android.material.snackbar.Snackbar;
 import com.google.android.play.core.appupdate.AppUpdateInfo;
 import com.google.android.play.core.appupdate.AppUpdateManager;
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory;
+import com.google.android.play.core.install.InstallState;
+import com.google.android.play.core.install.InstallStateUpdatedListener;
 import com.google.android.play.core.install.model.AppUpdateType;
+import com.google.android.play.core.install.model.InstallStatus;
 import com.google.android.play.core.install.model.UpdateAvailability;
 import com.google.android.play.core.tasks.Task;
 
 public class MainActivity extends AppCompatActivity {
     private int MY_REQUEST_CODE =111;
+    private AppUpdateManager appUpdateManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -24,7 +32,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         // Creates instance of the manager.
-        AppUpdateManager appUpdateManager = AppUpdateManagerFactory.create(MainActivity.this);
+        appUpdateManager = AppUpdateManagerFactory.create(MainActivity.this);
 
 // Returns an intent object that you use to check for an update.
         Task<AppUpdateInfo> appUpdateInfoTask = appUpdateManager.getAppUpdateInfo();
@@ -33,16 +41,16 @@ public class MainActivity extends AppCompatActivity {
         appUpdateInfoTask.addOnSuccessListener(appUpdateInfo -> {
             if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
                     // For a flexible update, use AppUpdateType.FLEXIBLE
-                    && appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)) {
+                    && appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)) {
                 // Request the update.
                 try {
                     appUpdateManager.startUpdateFlowForResult(
                             // Pass the intent that is returned by 'getAppUpdateInfo()'.
                             appUpdateInfo,
                             // Or 'AppUpdateType.FLEXIBLE' for flexible updates.
-                            AppUpdateType.IMMEDIATE,
+                            AppUpdateType.FLEXIBLE,
                             // The current activity making the update request.
-                            this,
+                            MainActivity.this,
                             // Include a request code to later monitor this update request.
                             MY_REQUEST_CODE);
                 } catch (IntentSender.SendIntentException e) {
@@ -51,9 +59,37 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        appUpdateManager.registerListener(installStateUpdatedListener);
 
     }
 
+    private InstallStateUpdatedListener installStateUpdatedListener = new InstallStateUpdatedListener() {
+        @Override
+        public void onStateUpdate(@NonNull InstallState state) {
+            if(state.installStatus() == InstallStatus.DOWNLOADED){
+                completeup();
+            }
+        }
+    };
+
+    private void completeup() {
+        Snackbar snackbar = Snackbar.make(findViewById(R.id.main_layout),"Update Is Done",
+                Snackbar.LENGTH_INDEFINITE);
+        snackbar.setAction("Install", new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                appUpdateManager.completeUpdate();
+            }
+        });
+        snackbar.show();
+    }
+
+    @Override
+    protected void onStop() {
+        if(appUpdateManager!=null) appUpdateManager.unregisterListener(installStateUpdatedListener);
+        super.onStop();
+
+    }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
